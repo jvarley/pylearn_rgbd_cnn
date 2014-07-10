@@ -26,19 +26,19 @@ if __name__ == "__main__":
     # First we want to pull out small patches of the images, since it's easier
     # to train an RBM on these
     pipeline.items.append(
-        rgbd_preprocessor.ExtractPatches(patch_shape=(60, 80), num_patches=50)
+        rgbd_preprocessor.ExtractPatches(patch_shape=(60, 80), num_patches=100000)
     )
 
     # Next we contrast normalize the patches. The default arguments use the
     # same "regularization" parameters as those used in Adam Coates, Honglak
     # Lee, and Andrew Ng's paper "An Analysis of Single-Layer Networks in
     # Unsupervised Feature Learning"
-    #pipeline.items.append(preprocessing.GlobalContrastNormalization(sqrt_bias=10., use_std=True))
+    pipeline.items.append(preprocessing.GlobalContrastNormalization(sqrt_bias=10., use_std=True))
 
     # Finally we whiten the data using ZCA. Again, the default parameters to
     # ZCA are set to the same values as those used in the previously mentioned
     # paper.
-    #pipeline.items.append(preprocessing.ZCA())
+    pipeline.items.append(preprocessing.ZCA())
 
     # Here we apply the preprocessing pipeline to the dataset. The can_fit
     # argument indicates that data-driven preprocessing steps (such as the ZCA
