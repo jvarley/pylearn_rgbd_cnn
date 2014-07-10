@@ -14,7 +14,8 @@ from pylearn2.datasets import dense_design_matrix
 from pylearn2.datasets.dataset import Dataset
 from pylearn2.utils import safe_zip, iteration,  safe_izip, wraps
 
-
+import pylearn2.space
+import pylearn2.utils.one_hot
 from pylearn2.space import CompositeSpace
 from pylearn2.utils.data_specs import is_flat_specs
 
@@ -62,11 +63,7 @@ class RGBDLabeledDataset(dense_design_matrix.DenseDesignMatrix):
 
             labels = data['labels'][samples_range[0]:samples_range[1], :, :]
             labels = np.expand_dims(labels, 3)
-            # import IPython
-            # IPython.embed()
-            #labels_hot = pylearn2.utils.one_hot.one_hot(labels=labels.flatten(), max_label=894)
 
-            #return labels_hot
             return labels
 
         data = h5py.File(datafile, "r")
@@ -286,11 +283,10 @@ class FiniteDatasetExpandingYIterator(object):
                 # otherwise they would change in the next iteration
                 # of the loop.
                 if fn is None:
-                    import IPython
-                    import pylearn2.space
-                    import pylearn2.utils.one_hot
-
+                    #######################################################
+                    #this was added to to expand the y's just when we need them
                     dspace = pylearn2.space.VectorSpace(894)
+
                     def fn(batch, dspace=dspace, sp=sp):
                         try:
                             batch_2 = pylearn2.utils.one_hot.one_hot(batch.astype(int), max_label=893)
@@ -302,6 +298,7 @@ class FiniteDatasetExpandingYIterator(object):
                                            'dataset have been initialized with '\
                                            'correct values.'
                             raise ValueError(msg)
+                    #########################################################
                 else:
                     fn = (lambda batch, dspace=dspace, sp=sp, fn_=fn:
                           dspace.np_format_as(fn_(batch), sp))
