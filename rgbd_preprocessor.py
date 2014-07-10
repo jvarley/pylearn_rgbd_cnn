@@ -46,7 +46,7 @@ class ExtractPatches(preprocessing.Preprocessor):
         # number of channels
         output_shape.append(X.shape[-1])
         output_topo_x = numpy.zeros(output_shape, dtype=X.dtype)
-        output_y = numpy.zeros(self.num_patches)
+        output_y = numpy.zeros((self.num_patches, 1))
         channel_slice = slice(0, X.shape[-1])
         for i in xrange(self.num_patches):
 

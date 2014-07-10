@@ -17,7 +17,6 @@ from pylearn2.testing import skip
 from pylearn2.testing import no_debug_mode
 from pylearn2.config import yaml_parse
 
-print "finished imports"
 
 def test_convolutional_network():
 
@@ -30,7 +29,7 @@ def test_convolutional_network():
     hyper_params = {'train_stop': 50,
                     'valid_stop': 50,
                     'test_stop': 50,
-                    'batch_size': 50,
+                    'batch_size': 10,
                     'output_channels_h2': 4,
                     'output_channels_h3': 4,
                     'max_epochs': 1,
@@ -44,5 +43,5 @@ def test_convolutional_network():
     except:
         pass
 
-print "finished file"
+
 test_convolutional_network()
