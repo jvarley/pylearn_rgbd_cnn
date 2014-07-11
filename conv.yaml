@@ -1,5 +1,5 @@
 !obj:pylearn2.train.Train {
-    dataset: &train !obj:rgbd_labeled_dataset.get_dataset {
+    dataset: &train !obj:rgbd_labeled_dataset_hdf5.get_dataset {
         which_set: 'train',
         one_hot: 1,
         start: 0,
@@ -43,13 +43,13 @@
         },
         monitoring_dataset:
             {
-                'valid' : !obj:rgbd_labeled_dataset.get_dataset {
+                'valid' : !obj:rgbd_labeled_dataset_hdf5.get_dataset {
                               which_set: 'train',
                               one_hot: 1,
                               start: 0,
                               stop:  %(valid_stop)i
                           },
-                'test'  : !obj:rgbd_labeled_dataset.get_dataset {
+                'test'  : !obj:rgbd_labeled_dataset_hdf5.get_dataset {
                               which_set: 'test',
                               one_hot: 1,
                               stop: %(test_stop)i

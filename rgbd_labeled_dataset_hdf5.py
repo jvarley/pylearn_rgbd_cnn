@@ -2,6 +2,7 @@
 Objects for datasets serialized in HDF5 format (.h5).
 """
 
+#based off of:
 __author__ = "Steven Kearnes"
 __copyright__ = "Copyright 2014, Stanford University"
 __license__ = "3-clause BSD"
@@ -13,12 +14,29 @@ except ImportError:
     h5py = None
 import numpy as np
 import warnings
+import os
 
 from pylearn2.datasets.dense_design_matrix import (DenseDesignMatrix,
                                                    DefaultViewConverter)
 from pylearn2.space import CompositeSpace, VectorSpace
-from pylearn2.utils.iteration import FiniteDatasetIterator, safe_izip
+from pylearn2.utils.iteration import FiniteDatasetIterator, safe_izip , wraps , SubsetIterator
 
+
+import pylearn2.space
+from pylearn2.utils.data_specs import is_flat_specs
+
+
+
+def get_dataset(which_set='train', one_hot=1, start=0, stop=10):
+
+    pylearn_data_path = os.environ["PYLEARN2_DATA_PATH"]
+    hdf5_dataset_filename = pylearn_data_path + "/nyu_depth_labeled/out.mat"
+
+    dataset = HDF5Dataset(hdf5_dataset_filename,
+                          X="rgbd_flattened_patches",
+                          y="patch_labels")
+
+    return dataset
 
 class HDF5Dataset(DenseDesignMatrix):
     """
@@ -114,9 +132,18 @@ class HDF5Dataset(DenseDesignMatrix):
         ----------
         WRITEME
         """
-        iterator = super(HDF5Dataset, self).iterator(*args, **kwargs)
-        iterator.__class__ = HDF5DatasetIterator
-        return iterator
+        #iterator = super(HDF5Dataset, self).iterator(*args, **kwargs)
+        #iterator.__class__ = HDF5DatasetIterator
+        HDF5DatasetIterator
+        #return iterator
+        return HDF5DatasetIterator(self,
+                                     mode(self.X.shape[0],
+                                          batch_size,
+                                          num_batches,
+                                          rng),
+                                     data_specs=data_specs,
+                                     return_tuple=return_tuple,
+                                     convert=convert)
 
     def set_topological_view(self, V, axes=('b', 0, 1, 'c')):
         """
@@ -173,7 +200,99 @@ class HDF5Dataset(DenseDesignMatrix):
         self.X[start:start+self.batch_size] = X
 
 
-class HDF5DatasetIterator(FiniteDatasetIterator):
+class HDF5DatasetIterator(object):
+
+    def __init__(self, dataset, subset_iterator, data_specs=None,
+                 return_tuple=False, convert=None):
+        self._data_specs = data_specs
+        self._dataset = dataset
+        self._subset_iterator = subset_iterator
+        self._return_tuple = return_tuple
+
+        # Keep only the needed sources in self._raw_data.
+        # Remember what source they correspond to in self._source
+        assert is_flat_specs(data_specs)
+
+        dataset_space, dataset_source = self._dataset.get_data_specs()
+        assert is_flat_specs((dataset_space, dataset_source))
+
+        # the dataset's data spec is either a single (space, source) pair,
+        # or a pair of (non-nested CompositeSpace, non-nested tuple).
+        # We could build a mapping and call flatten(..., return_tuple=True)
+        # but simply putting spaces, sources and data in tuples is simpler.
+        if not isinstance(dataset_source, tuple):
+            dataset_source = (dataset_source,)
+
+        if not isinstance(dataset_space, CompositeSpace):
+            dataset_sub_spaces = (dataset_space,)
+        else:
+            dataset_sub_spaces = dataset_space.components
+        assert len(dataset_source) == len(dataset_sub_spaces)
+
+        all_data = self._dataset.get_data()
+        if not isinstance(all_data, tuple):
+            all_data = (all_data,)
+
+        space, source = data_specs
+        if not isinstance(source, tuple):
+            source = (source,)
+        if not isinstance(space, CompositeSpace):
+            sub_spaces = (space,)
+        else:
+            sub_spaces = space.components
+        assert len(source) == len(sub_spaces)
+
+        self._raw_data = tuple(all_data[dataset_source.index(s)]
+                               for s in source)
+        self._source = source
+
+        if convert is None:
+            self._convert = [None for s in source]
+        else:
+            assert len(convert) == len(source)
+            self._convert = convert
+
+        for i, (so, sp, dt) in enumerate(safe_izip(source,
+                                                   sub_spaces,
+                                                   self._raw_data)):
+            idx = dataset_source.index(so)
+            dspace = dataset_sub_spaces[idx]
+
+            init_fn = self._convert[i]
+            fn = init_fn
+
+            # If there is an init_fn, it is supposed to take
+            # care of the formatting, and it should be an error
+            # if it does not. If there was no init_fn, then
+            # the iterator will try to format using the generic
+            # space-formatting functions.
+            if init_fn is None:
+                # "dspace" and "sp" have to be passed as parameters
+                # to lambda, in order to capture their current value,
+                # otherwise they would change in the next iteration
+                # of the loop.
+                if fn is None:
+                    #######################################################
+                    #this was added to to expand the y's just when we need them
+                    dspace = pylearn2.space.VectorSpace(894)
+
+                    def fn(batch, dspace=dspace, sp=sp):
+                        try:
+                            batch_2 = pylearn2.utils.one_hot.one_hot(batch.astype(int), max_label=893)
+                            #return dspace.np_format_as(batch, sp)
+                            return dspace.np_format_as(batch_2, sp)
+
+                        except ValueError as e:
+                            msg = str(e) + '\nMake sure that the model and '\
+                                           'dataset have been initialized with '\
+                                           'correct values.'
+                            raise ValueError(msg)
+                    #########################################################
+                else:
+                    fn = (lambda batch, dspace=dspace, sp=sp, fn_=fn:
+                          dspace.np_format_as(fn_(batch), sp))
+
+            self._convert[i] = fn
     """
     Dataset iterator for HDF5 datasets.
 
@@ -223,6 +342,34 @@ class HDF5DatasetIterator(FiniteDatasetIterator):
         if not self._return_tuple and len(rval) == 1:
             rval, = rval
         return rval
+
+    def __iter__(self):
+        return self
+
+    @property
+    @wraps(SubsetIterator.batch_size, assigned=(), updated=())
+    def batch_size(self):
+        return self._subset_iterator.batch_size
+
+    @property
+    @wraps(SubsetIterator.num_batches, assigned=(), updated=())
+    def num_batches(self):
+        return self._subset_iterator.num_batches
+
+    @property
+    @wraps(SubsetIterator.num_examples, assigned=(), updated=())
+    def num_examples(self):
+        return self._subset_iterator.num_examples
+
+    @property
+    @wraps(SubsetIterator.uneven, assigned=(), updated=())
+    def uneven(self):
+        return self._subset_iterator.uneven
+
+    @property
+    @wraps(SubsetIterator.stochastic, assigned=(), updated=())
+    def stochastic(self):
+        return self._subset_iterator.stochastic
 
 
 class HDF5ViewConverter(DefaultViewConverter):
