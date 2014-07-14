@@ -16,6 +16,14 @@ import numpy as np
 import warnings
 import os
 
+import functools
+from pylearn2.datasets.dataset import Dataset
+from pylearn2.utils import safe_zip
+from pylearn2.utils.iteration import (
+    FiniteDatasetIterator,
+    resolve_iterator_class
+)
+
 from pylearn2.datasets.dense_design_matrix import (DenseDesignMatrix,
                                                    DefaultViewConverter)
 from pylearn2.space import CompositeSpace, VectorSpace
@@ -23,6 +31,7 @@ from pylearn2.utils.iteration import FiniteDatasetIterator, safe_izip , wraps , 
 
 
 import pylearn2.space
+import pylearn2.utils.one_hot
 from pylearn2.utils.data_specs import is_flat_specs
 
 
@@ -62,8 +71,7 @@ class HDF5Dataset(DenseDesignMatrix):
                  load_all=False, batch_size=100, **kwargs):
         self.batch_size = batch_size
         self.load_all = load_all
-        if h5py is None:
-            raise RuntimeError("Could not import h5py.")
+
         self._file = h5py.File(filename)
         if X is not None:
             X = self.get_dataset(X, load_all)
@@ -120,22 +128,143 @@ class HDF5Dataset(DenseDesignMatrix):
             data.ndim = len(data.shape)  # hdf5 handle has no ndim
         return data
 
-    def iterator(self, *args, **kwargs):
-        """
-        Get an iterator for this dataset.
+    # def iterator(self, *args, **kwargs):
+    #     """
+    #     Get an iterator for this dataset.
+    #
+    #     The FiniteDatasetIterator uses indexing that is not supported by
+    #     HDF5 datasets, so we change the class to HDF5DatasetIterator to
+    #     override the iterator.next method used in dataset iteration.
+    #
+    #     Parameters
+    #     ----------
+    #     WRITEME
+    #     """
+    #     iterator = super(HDF5Dataset, self).iterator(*args, **kwargs)
+    #     iterator.__class__ = HDF5DatasetIterator
+    #     #HDF5DatasetIterator
+    #     return iterator
+        #return HDF5DatasetIterator(self,
+                                     # mode(self.X.shape[0],
+                                     #      batch_size,
+                                     #      num_batches,
+                                     #      rng),
+                                     # data_specs=data_specs,
+                                     # return_tuple=return_tuple,
+                                     # convert=convert)
+        #iterator = HDF5DatasetIterator(self,
+        #                               data,
+        #                               subset_iterator,
+        #                               data_specs=None,
+        #         return_tuple=False, convert=None
 
-        The FiniteDatasetIterator uses indexing that is not supported by
-        HDF5 datasets, so we change the class to HDF5DatasetIterator to
-        override the iterator.next method used in dataset iteration.
+    @functools.wraps(Dataset.iterator)
+    def iterator(self, mode=None, batch_size=None, num_batches=None,
+                 topo=None, targets=None, rng=None, data_specs=None,
+                 return_tuple=False):
 
-        Parameters
-        ----------
-        WRITEME
-        """
-        #iterator = super(HDF5Dataset, self).iterator(*args, **kwargs)
-        #iterator.__class__ = HDF5DatasetIterator
-        HDF5DatasetIterator
-        #return iterator
+        if topo is not None or targets is not None:
+            if data_specs is not None:
+                raise ValueError('In DenseDesignMatrix.iterator, both the '
+                                 '"data_specs" argument and deprecated '
+                                 'arguments "topo" or "targets" were '
+                                 'provided.',
+                                 (data_specs, topo, targets))
+
+            warnings.warn("Usage of `topo` and `target` arguments are "
+                          "being deprecated, and will be removed "
+                          "around November 7th, 2013. `data_specs` "
+                          "should be used instead.",
+                          stacklevel=2)
+
+            # build data_specs from topo and targets if needed
+            if topo is None:
+                topo = getattr(self, '_iter_topo', False)
+            if topo:
+                # self.iterator is called without a data_specs, and with
+                # "topo=True", so we use the default topological space
+                # stored in self.X_topo_space
+                assert self.X_topo_space is not None
+                X_space = self.X_topo_space
+            else:
+                X_space = self.X_space
+
+            if targets is None:
+                targets = getattr(self, '_iter_targets', False)
+            if targets:
+                assert self.y is not None
+                y_space = self.data_specs[0].components[1]
+                space = CompositeSpace((X_space, y_space))
+                source = ('features', 'targets')
+            else:
+                space = X_space
+                source = 'features'
+
+            data_specs = (space, source)
+            convert = None
+
+        else:
+            if data_specs is None:
+                data_specs = self._iter_data_specs
+
+            # If there is a view_converter, we have to use it to convert
+            # the stored data for "features" into one that the iterator
+            # can return.
+            space, source = data_specs
+            if isinstance(space, CompositeSpace):
+                sub_spaces = space.components
+                sub_sources = source
+            else:
+                sub_spaces = (space,)
+                sub_sources = (source,)
+
+            convert = []
+            for sp, src in safe_zip(sub_spaces, sub_sources):
+                if src == 'features' and \
+                   getattr(self, 'view_converter', None) is not None:
+                    conv_fn = (lambda batch, self=self, space=sp:
+                               self.view_converter.get_formatted_batch(batch,
+                                                                       space))
+                elif src == "targets":
+                    #######################################################
+                    #this was added to to expand the y's just when we need them
+                    dspace = pylearn2.space.VectorSpace(894)
+
+                    def fn(batch, dspace=dspace, sp=sp):
+                        try:
+
+                            batch_2 = pylearn2.utils.one_hot.one_hot(batch.astype(int), max_label=893)
+                            #return dspace.np_format_as(batch, sp)
+                            return dspace.np_format_as(batch_2, sp)
+
+                        except ValueError as e:
+                            msg = str(e) + '\nMake sure that the model and '\
+                                           'dataset have been initialized with '\
+                                           'correct values.'
+                            raise ValueError(msg)
+                    conv_fn = fn
+                    #########################################################
+                else:
+                    conv_fn = None
+
+                convert.append(conv_fn)
+
+        # TODO: Refactor
+        if mode is None:
+            if hasattr(self, '_iter_subset_class'):
+                mode = self._iter_subset_class
+            else:
+                raise ValueError('iteration mode not provided and no default '
+                                 'mode set for %s' % str(self))
+        else:
+            mode = resolve_iterator_class(mode)
+
+        if batch_size is None:
+            batch_size = getattr(self, '_iter_batch_size', None)
+        if num_batches is None:
+            num_batches = getattr(self, '_iter_num_batches', None)
+        if rng is None and mode.stochastic:
+            rng = self.rng
         return HDF5DatasetIterator(self,
                                      mode(self.X.shape[0],
                                           batch_size,
@@ -271,23 +400,17 @@ class HDF5DatasetIterator(object):
                 # to lambda, in order to capture their current value,
                 # otherwise they would change in the next iteration
                 # of the loop.
+
                 if fn is None:
-                    #######################################################
-                    #this was added to to expand the y's just when we need them
-                    dspace = pylearn2.space.VectorSpace(894)
 
                     def fn(batch, dspace=dspace, sp=sp):
                         try:
-                            batch_2 = pylearn2.utils.one_hot.one_hot(batch.astype(int), max_label=893)
-                            #return dspace.np_format_as(batch, sp)
-                            return dspace.np_format_as(batch_2, sp)
-
+                              return dspace.np_format_as(batch, sp)
                         except ValueError as e:
                             msg = str(e) + '\nMake sure that the model and '\
                                            'dataset have been initialized with '\
                                            'correct values.'
                             raise ValueError(msg)
-                    #########################################################
                 else:
                     fn = (lambda batch, dspace=dspace, sp=sp, fn_=fn:
                           dspace.np_format_as(fn_(batch), sp))
@@ -336,6 +459,7 @@ class HDF5DatasetIterator(object):
                 this_data = data[next_index, :]
             if fn:
                 this_data = fn(this_data)
+
             assert not np.any(np.isnan(this_data))
             rval.append(this_data)
         rval = tuple(rval)

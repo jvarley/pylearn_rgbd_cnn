@@ -8,7 +8,7 @@
     model: !obj:pylearn2.models.mlp.MLP {
         batch_size: %(batch_size)i,
         input_space: !obj:pylearn2.space.Conv2DSpace {
-            shape: [60, 80],
+            shape: [80, 60],
             num_channels: 4
         },
         layers: [ !obj:pylearn2.models.mlp.ConvRectifiedLinear {
