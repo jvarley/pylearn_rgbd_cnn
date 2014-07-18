@@ -12,7 +12,7 @@ from pylearn2.expr.preprocessing import global_contrast_normalize
 
 class ExtractRawNYUData(preprocessing.Preprocessor):
 
-    def _init__(self, raw_data_filepath,  data_labels=("rgbd", "labels")):
+    def __init__(self, raw_data_filepath,  data_labels=("rgbd", "labels")):
         self.raw_data_filepath = raw_data_filepath
         self.data_labels = data_labels
 

@@ -1,54 +1,31 @@
-"""
-Objects for datasets serialized in HDF5 format (.h5).
-"""
 
-#based off of:
-__author__ = "Steven Kearnes"
-__copyright__ = "Copyright 2014, Stanford University"
-__license__ = "3-clause BSD"
-__maintainer__ = "Steven Kearnes"
-
-try:
-    import h5py
-except ImportError:
-    h5py = None
+import h5py
 import numpy as np
 import warnings
 import os
-
 import functools
+
 from pylearn2.datasets.dataset import Dataset
+from pylearn2.datasets.dense_design_matrix import DenseDesignMatrix, DefaultViewConverter
+
 from pylearn2.utils import safe_zip
-from pylearn2.utils.iteration import (
-    FiniteDatasetIterator,
-    resolve_iterator_class
-)
-
-from pylearn2.datasets.dense_design_matrix import (DenseDesignMatrix,
-                                                   DefaultViewConverter)
-from pylearn2.space import CompositeSpace, VectorSpace
-from pylearn2.utils.iteration import FiniteDatasetIterator, safe_izip , wraps , SubsetIterator
-
-
-import pylearn2.space
 import pylearn2.utils.one_hot
 from pylearn2.utils.data_specs import is_flat_specs
+from pylearn2.utils.iteration import safe_izip, wraps, SubsetIterator, resolve_iterator_class
+
+import pylearn2.space
+from pylearn2.space import CompositeSpace, VectorSpace
+
 
 PYLEARN_DATA_PATH = os.environ["PYLEARN2_DATA_PATH"]
 
+
 def get_dataset(which_set='train'):
 
-    hdf5_dataset_filename = PYLEARN_DATA_PATH + "/nyu_depth_labeled/" + "train" + ".mat"
+    hdf5_dataset_filename = PYLEARN_DATA_PATH + "/nyu_depth_labeled/rgbd_preprocessed.h5"
 
-    if which_set == "train":
-        X = "25_25_flattened_train_patches"
-        y = "25_25_patch_labels"
-    if which_set == "test":
-        X = "25_25_flattened_test_patches"
-        y = "25_25_test_patch_labels"
-    if which_set == "valid":
-        X = "25_25_flattened_valid_patches"
-        y = "25_25_valid_patch_labels"
+    X = which_set + "_flattened_patches"
+    y = which_set + "_patch_labels"
 
     return HDF5Dataset(hdf5_dataset_filename, X=X, y=y)
 
