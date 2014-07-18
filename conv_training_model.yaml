@@ -8,7 +8,7 @@
     model: !obj:pylearn2.models.mlp.MLP {
         batch_size: %(batch_size)i,
         input_space: !obj:pylearn2.space.Conv2DSpace {
-            shape: [80, 60],
+            shape: [25, 25],
             num_channels: 4
         },
         layers: [ !obj:pylearn2.models.mlp.ConvRectifiedLinear {
@@ -19,15 +19,15 @@
                      pool_shape: [4, 4],
                      pool_stride: [2, 2],
                      max_kernel_norm: 1.9365
-                 }, !obj:pylearn2.models.mlp.ConvRectifiedLinear {
+                 },!obj:pylearn2.models.mlp.ConvRectifiedLinear {
                      layer_name: 'h3',
                      output_channels: %(output_channels_h3)i,
                      irange: .05,
-                     kernel_shape: [10, 10],
-                     pool_shape: [4, 4],
+                     kernel_shape: [7, 7],
+                     pool_shape: [3, 3],
                      pool_stride: [2, 2],
                      max_kernel_norm: 1.9365
-                 }, !obj:pylearn2.models.mlp.Softmax {
+                 },!obj:pylearn2.models.mlp.Softmax {
                      max_col_norm: 1.9365,
                      layer_name: 'y',
                      n_classes: 894,
@@ -38,13 +38,14 @@
     algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
         batch_size: %(batch_size)i,
         learning_rate: .01,
+        batches_per_iter: 20,
         learning_rule: !obj:pylearn2.training_algorithms.learning_rule.Momentum {
             init_momentum: .5
         },
         monitoring_dataset:
             {
                 'valid' : !obj:rgbd_labeled_dataset_hdf5.get_dataset {
-                              which_set: 'train',
+                              which_set: 'valid',
                               one_hot: 1,
                               start: 0,
                               stop:  %(valid_stop)i
@@ -79,7 +80,7 @@
     extensions:
         [ !obj:pylearn2.train_extensions.best_params.MonitorBasedSaveBest {
              channel_name: 'valid_y_misclass',
-             save_path: "%(save_path)s/convolutional_network_best.pkl"
+             save_path: "%(save_path)s/convolutional_2_layer_network_best.pkl"
         }, !obj:pylearn2.training_algorithms.learning_rule.MomentumAdjustor {
             start: 1,
             saturate: 10,

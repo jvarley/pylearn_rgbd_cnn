@@ -24,23 +24,18 @@ def test_convolutional_network():
     yaml_file_path = os.path.abspath(os.path.dirname(__file__))
     save_path = os.path.dirname(os.path.realpath(__file__))
 
-    yaml = open("{0}/conv.yaml".format(yaml_file_path), 'r').read()
+    yaml = open("{0}/conv_training_model.yaml".format(yaml_file_path), 'r').read()
     hyper_params = {'train_stop': 50,
                     'valid_stop': 50,
                     'test_stop': 50,
-                    'batch_size': 10,
-                    'output_channels_h2': 64,
+                    'batch_size': 50,
+                    'output_channels_h2': 32,
                     'output_channels_h3': 64,
-                    'max_epochs': 1000,
+                    'max_epochs': 1,
                     'save_path': save_path}
     yaml = yaml % (hyper_params)
     train = yaml_parse.load(yaml)
     train.main_loop()
-
-    try:
-        os.remove("{}/convolutional_network_best.pkl".format(save_path))
-    except:
-        pass
 
 
 test_convolutional_network()

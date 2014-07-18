@@ -34,18 +34,24 @@ import pylearn2.space
 import pylearn2.utils.one_hot
 from pylearn2.utils.data_specs import is_flat_specs
 
-
+PYLEARN_DATA_PATH = os.environ["PYLEARN2_DATA_PATH"]
 
 def get_dataset(which_set='train', one_hot=1, start=0, stop=10):
 
-    pylearn_data_path = os.environ["PYLEARN2_DATA_PATH"]
-    hdf5_dataset_filename = pylearn_data_path + "/nyu_depth_labeled/out.mat"
+    hdf5_dataset_filename = PYLEARN_DATA_PATH + "/nyu_depth_labeled/" + "train" + ".mat"
 
-    dataset = HDF5Dataset(hdf5_dataset_filename,
-                          X="rgbd_flattened_patches",
-                          y="patch_labels")
+    if which_set == "train":
+        X = "25_25_flattened_train_patches"
+        y = "25_25_patch_labels"
+    if which_set == "test":
+        X = "25_25_flattened_test_patches"
+        y = "25_25_test_patch_labels"
+    if which_set == "valid":
+        X = "25_25_flattened_valid_patches"
+        y = "25_25_valid_patch_labels"
 
-    return dataset
+    return HDF5Dataset(hdf5_dataset_filename, X=X, y=y)
+
 
 class HDF5Dataset(DenseDesignMatrix):
     """
@@ -128,35 +134,7 @@ class HDF5Dataset(DenseDesignMatrix):
             data.ndim = len(data.shape)  # hdf5 handle has no ndim
         return data
 
-    # def iterator(self, *args, **kwargs):
-    #     """
-    #     Get an iterator for this dataset.
-    #
-    #     The FiniteDatasetIterator uses indexing that is not supported by
-    #     HDF5 datasets, so we change the class to HDF5DatasetIterator to
-    #     override the iterator.next method used in dataset iteration.
-    #
-    #     Parameters
-    #     ----------
-    #     WRITEME
-    #     """
-    #     iterator = super(HDF5Dataset, self).iterator(*args, **kwargs)
-    #     iterator.__class__ = HDF5DatasetIterator
-    #     #HDF5DatasetIterator
-    #     return iterator
-        #return HDF5DatasetIterator(self,
-                                     # mode(self.X.shape[0],
-                                     #      batch_size,
-                                     #      num_batches,
-                                     #      rng),
-                                     # data_specs=data_specs,
-                                     # return_tuple=return_tuple,
-                                     # convert=convert)
-        #iterator = HDF5DatasetIterator(self,
-        #                               data,
-        #                               subset_iterator,
-        #                               data_specs=None,
-        #         return_tuple=False, convert=None
+
 
     @functools.wraps(Dataset.iterator)
     def iterator(self, mode=None, batch_size=None, num_batches=None,
@@ -265,6 +243,7 @@ class HDF5Dataset(DenseDesignMatrix):
             num_batches = getattr(self, '_iter_num_batches', None)
         if rng is None and mode.stochastic:
             rng = self.rng
+
         return HDF5DatasetIterator(self,
                                      mode(self.X.shape[0],
                                           batch_size,
@@ -447,7 +426,8 @@ class HDF5DatasetIterator(object):
         next_index = self._subset_iterator.next()
 
         # convert to boolean selection
-        sel = np.zeros(self.num_examples, dtype=bool)
+        #sel = np.zeros(self.num_examples, dtype=bool)
+        sel = np.zeros(100000, dtype=bool)
         sel[next_index] = True
         next_index = sel
 
