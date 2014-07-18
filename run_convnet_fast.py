@@ -27,7 +27,7 @@ def get_classifier():
     return f
 
 
-def get_image_features():
+def get_image_feature_extractor():
     f = open(CONV_MODEL_FILENAME)
     cnn_model = cPickle.load(f)
     new_space = pylearn2.space.Conv2DSpace((320, 240), num_channels=4, axes=('b', 0, 1, 'c'), dtype='float32')
@@ -52,8 +52,19 @@ def get_image(image_id=0):
 
 
 if __name__ == "__main__":
+    #this is the bottom half of the trained conv net
+    #we just change the shape of the input and remove the
+    # fully connected top layer
+    feature_extractor = get_image_feature_extractor()
+
+    #this is the top half of the trained convnet
+    #we need to remove the softmax functionality since
+    # 1) theano does not support softmax on a 3d tensor
+    # 2) we only need it for training, we can run argmax on the
+    #    raw outputs of the classifier without running softmax first
     classifier = get_classifier()
-    feature_extractor = get_image_features()
+
+    #just grab a random image to test with
     image = get_image()
 
     image_features = feature_extractor(image[:, 0:320, 0:240, :])
