@@ -36,7 +36,7 @@ from pylearn2.utils.data_specs import is_flat_specs
 
 PYLEARN_DATA_PATH = os.environ["PYLEARN2_DATA_PATH"]
 
-def get_dataset(which_set='train', one_hot=1, start=0, stop=10):
+def get_dataset(which_set='train'):
 
     hdf5_dataset_filename = PYLEARN_DATA_PATH + "/nyu_depth_labeled/" + "train" + ".mat"
 

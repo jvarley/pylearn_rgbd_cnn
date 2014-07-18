@@ -1,9 +1,6 @@
 !obj:pylearn2.train.Train {
     dataset: &train !obj:rgbd_labeled_dataset_hdf5.get_dataset {
-        which_set: 'train',
-        one_hot: 1,
-        start: 0,
-        stop: %(train_stop)i
+        which_set: 'train'
     },
     model: !obj:pylearn2.models.mlp.MLP {
         batch_size: %(batch_size)i,
@@ -45,15 +42,10 @@
         monitoring_dataset:
             {
                 'valid' : !obj:rgbd_labeled_dataset_hdf5.get_dataset {
-                              which_set: 'valid',
-                              one_hot: 1,
-                              start: 0,
-                              stop:  %(valid_stop)i
+                              which_set: 'valid'
                           },
                 'test'  : !obj:rgbd_labeled_dataset_hdf5.get_dataset {
-                              which_set: 'test',
-                              one_hot: 1,
-                              stop: %(test_stop)i
+                              which_set: 'test'
                           }
             },
         cost: !obj:pylearn2.costs.cost.SumOfCosts { costs: [
@@ -68,7 +60,7 @@
             criteria: [
                 !obj:pylearn2.termination_criteria.MonitorBased {
                     channel_name: "valid_y_misclass",
-                    prop_decrease: 0.50,
+                    prop_decrease: 0.001,
                     N: 10
                 },
                 !obj:pylearn2.termination_criteria.EpochCounter {

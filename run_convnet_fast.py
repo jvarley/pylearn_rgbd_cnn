@@ -18,16 +18,27 @@ def get_classifier():
     cnn_model = cPickle.load(f)
     cnn_model = cnn_model.layers[2]
 
+    #This is the output of the feature extractor
+    #shape should be:
+    #(~num_rows, ~num_cols, num_features)
+    #it is ~num_rows and ~num_cols because depending on
+    #pool_stride and kernel_size from the feature extraction, there is some 0-padding of the input
+    # and the max pooling with scale the output down
     X = cnn_model.get_input_space().make_theano_batch()
-    W = cnn_model.W
-    b = cnn_model.b
-    Z = T.dot(X, W) + b
+
+    #Z is now a 3d tensor of shape
+    # (~num_rows,~num_cols, num_labels)
+    Z = T.dot(X, cnn_model.W) + cnn_model.b
+
+    #we can take the arg max to get the per pixel label
+    #So Y is of shape:
+    # (1, ~num_rows, ~num_cols)
     Y = T.argmax(Z, axis=3)
-    f = theano.function([X], Y)
-    return f
+
+    return theano.function([X], Y)
 
 
-def get_image_feature_extractor():
+def get_feature_extractor():
     f = open(CONV_MODEL_FILENAME)
     cnn_model = cPickle.load(f)
     new_space = pylearn2.space.Conv2DSpace((320, 240), num_channels=4, axes=('b', 0, 1, 'c'), dtype='float32')
@@ -44,7 +55,7 @@ def get_image_feature_extractor():
     return f
 
 
-def get_image(image_id=0):
+def get_test_image(image_id=0):
     hdf5_dataset_filename = PYLEARN_DATA_PATH + "/nyu_depth_labeled/" + "train" + ".mat"
     dataset = h5py.File(hdf5_dataset_filename)
     rgbd_image = dataset['rgbd'][image_id]
@@ -55,7 +66,7 @@ if __name__ == "__main__":
     #this is the bottom half of the trained conv net
     #we just change the shape of the input and remove the
     # fully connected top layer
-    feature_extractor = get_image_feature_extractor()
+    feature_extractor = get_feature_extractor()
 
     #this is the top half of the trained convnet
     #we need to remove the softmax functionality since
@@ -65,7 +76,7 @@ if __name__ == "__main__":
     classifier = get_classifier()
 
     #just grab a random image to test with
-    image = get_image()
+    image = get_test_image()
 
     image_features = feature_extractor(image[:, 0:320, 0:240, :])
     classified_image = classifier(image_features)
