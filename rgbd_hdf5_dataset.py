@@ -22,7 +22,7 @@ PYLEARN_DATA_PATH = os.environ["PYLEARN2_DATA_PATH"]
 
 def get_dataset(which_set='train'):
 
-    hdf5_dataset_filename = PYLEARN_DATA_PATH + "/nyu_depth_labeled/rgbd_preprocessed.h5"
+    hdf5_dataset_filename = PYLEARN_DATA_PATH + "/nyu_depth_labeled/rgbd_preprocessed_72x72.h5"
 
     X = which_set + "_flattened_patches"
     y = which_set + "_patch_labels"

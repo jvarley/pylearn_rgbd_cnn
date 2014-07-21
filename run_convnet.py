@@ -3,59 +3,110 @@ import numpy as np
 import theano
 import theano.tensor as T
 import os
-from rgbd_labeled_dataset_hdf5 import HDF5Dataset
-
 import h5py
 
-pylearn_data_path = os.environ["PYLEARN2_DATA_PATH"]
-orig_file_filename = pylearn_data_path + "/nyu_depth_labeled/" + "nyu_depth_v2_labeled" + ".mat"
-orig_file = h5py.File(orig_file_filename)
+import pylearn2
+import matplotlib.pyplot as plt
+
+PYLEARN_DATA_PATH = os.environ["PYLEARN2_DATA_PATH"]
+
+CONV_MODEL_FILENAME = 'models/convolutional_network_best2.pkl'
 
 
-def get_pixel_classifier():
-    f = open('convolutional_network_best.pkl')
+def get_classifier():
+    f = open(CONV_MODEL_FILENAME)
+    cnn_model = cPickle.load(f)
+    cnn_model = cnn_model.layers[-1]
+
+    #This is the output of the feature extractor
+    #shape should be:
+    #(~num_rows, ~num_cols, num_features)
+    #it is ~num_rows and ~num_cols because depending on
+    #pool_stride and kernel_size from the feature extraction, there is some 0-padding of the input
+    # and the max pooling with scale the output down
+    X = cnn_model.get_input_space().make_theano_batch()
+
+    #Z is now a 3d tensor of shape
+    # (~num_rows,~num_cols, num_labels)
+    Y = T.dot(X, cnn_model.W) + cnn_model.b
+
+
+    #we can take the arg max to get the per pixel label
+    #So Y is of shape:
+    # (1, ~num_rows, ~num_cols)
+    Y_out = T.argmax(Y, axis=3)
+
+    return theano.function([X], Y_out)
+
+
+#this will be all layers except the last layer
+def get_feature_extractor():
+    f = open(CONV_MODEL_FILENAME)
     cnn_model = cPickle.load(f)
 
+    #we want the input space to be the entire image
+    new_space = pylearn2.space.Conv2DSpace((320, 240), num_channels=4, axes=('b', 0, 1, 'c'), dtype='float32')
+
+    #we need to get rid of the softmax layer so that
+    #we return a result for each pixel rather than
+    #the best category for the entire image
+    cnn_model.layers = cnn_model.layers[0:-1]
+
+    #we want to padd zeros around the edges rather than ignoring edge pixels
+    for i in range(len(cnn_model.layers)):
+        cnn_model.layers[i].border_mode = "full"
+
+    cnn_model.set_input_space(new_space)
     X = cnn_model.get_input_space().make_theano_batch()
     Y = cnn_model.fprop(X)
-    Y = T.argmax(Y, axis=1)
+
     f = theano.function([X], Y)
     return f
 
 
-def get_image():
-    pylearn_data_path = os.environ["PYLEARN2_DATA_PATH"]
-    hdf5_dataset_filename = pylearn_data_path + "/nyu_depth_labeled/" + "train" + ".mat"
-    dataset = h5py.File(hdf5_dataset_filename)
-    image = dataset['rgbd'][0]
-    return image
-
-
-def get_pixel_label(x, y):
+#returns the string label for a given integer between 0-894
+def get_pixel_label(dataset, output=755):
     pixel_label = ""
-    for i in orig_file[orig_file['names'][0][output[x,y]]][:]:
+    for i in dataset[dataset['names'][0][output]][:]:
         pixel_label += chr(i)
     print pixel_label
 
 
-classifier = get_pixel_classifier()
-image = get_image()
-image = np.expand_dims(image,0)
-output = np.zeros((640, 480))
-
-for x in range(len(image[0])):
-    for y in range(len(image[0,0])):
-        if x > 300 and y > 30 and x < 330 and y < 450:
-
-            patch = image[:,x-40:x+40, y-30:y+30, :]
-            output[x, y] = classifier(patch)[0]
-        else:
-            output[x, y] = 0
-
-    print "x: " + str(x) + " y: " + str(y) + " out: " + str(output[x,y])
+def get_test_image(image_id=0):
+    hdf5_dataset_filename = PYLEARN_DATA_PATH + "/nyu_depth_labeled/rgbd_preprocessed.h5"
+    dataset = h5py.File(hdf5_dataset_filename)
+    rgbd_image = dataset['rgbd'][image_id]
+    return np.expand_dims(rgbd_image, 0)
 
 
-import IPython
-IPython.embed()
+if __name__ == "__main__":
+    #this is the bottom half of the trained conv net
+    #we just change the shape of the input and remove the
+    # fully connected top layer
+    feature_extractor = get_feature_extractor()
+
+    #this is the top half of the trained convnet
+    #we need to remove the softmax functionality since
+    # 1) theano does not support softmax on a 3d tensor
+    # 2) we only need it for training, we can run argmax on the
+    #    raw outputs of the classifier without running softmax first
+    classifier = get_classifier()
+
+    #just grab a random image to test with
+    image = get_test_image()
+
+    image_features = feature_extractor(image[:, 0:320, 0:240, :])
+    import IPython
+    IPython.embed()
+    classified_image = classifier(image_features)
+    #switch from ('', '')
+    image_features = np.rollaxis(image_features, 1, 4)
+    plt.imshow(classified_image[0, :, :])
+
+    import IPython
+    IPython.embed()
+
+
+
 
 
