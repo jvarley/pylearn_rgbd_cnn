@@ -1,6 +1,8 @@
 
 import h5py
 import numpy as np
+import os
+from scipy import misc
 
 from pylearn2.datasets import preprocessing
 from pylearn2.expr.preprocessing import global_contrast_normalize
@@ -37,6 +39,87 @@ class ExtractRawNYUData(preprocessing.Preprocessor):
             dataset[self.data_labels[0]][i, :, :, 0:3] = np.rollaxis(raw_dataset["images"][i], 0, 3)
             dataset[self.data_labels[0]][i, :, :, 3] = raw_dataset["depths"][i]
             dataset[self.data_labels[1]][i] = raw_dataset["labels"][i]
+
+
+class ExtractRawUWashData(preprocessing.Preprocessor):
+
+    def __init__(self, raw_data_folder,  data_labels=("rgbd_patches", "patch_labels")):
+        self.raw_data_folder = raw_data_folder
+        self.data_labels = data_labels
+
+    def apply(self, dataset, can_fit=False):
+
+        #check if we have already extracted the raw data
+        if self.data_labels[0] in dataset.keys() or self.data_labels[1] in dataset.keys():
+            print "skipping extract_raw_data, this has already been run"
+            return
+
+        print "determining number of labels"
+        num_images = 0
+        label_list = []
+
+        for root, subfolders, files in os.walk(self.raw_data_folder):
+            for data_file in files:
+                if data_file.endswith("_crop.png"):
+                    num_images += 1
+                    label_list.append(root.split("/")[-1])
+
+        unique_label_list = list(set(label_list))
+
+        print "num_images:" + str(len(label_list))
+        print "num_labels:" + str(len(unique_label_list))
+
+        print "creating datasets"
+        dataset.create_dataset("label_id_to_string", (len(unique_label_list), 1), dtype=h5py.special_dtype(vlen=unicode))
+        dataset.create_dataset(self.data_labels[0], (num_images, 72, 72, 4), maxshape=(None, 72, 72, 4), chunks=(100, 72, 72, 4))
+        dataset.create_dataset(self.data_labels[1], (num_images, 1), maxshape=(None, 1), chunks=(100, 1))
+
+        for i in range(len(unique_label_list)):
+            dataset["label_id_to_string"][i] = unique_label_list[i]
+
+        print "converting data to h5py format"
+        total_count = 0
+        for root, subfolders, files in os.walk(self.raw_data_folder):
+
+            #print the current directory we are working on
+            print root
+
+            rgb_file_list = []
+            depth_file_list = []
+            label_list = []
+
+            for data_file in files:
+                if data_file.endswith("_crop.png"):
+                    rgb_file_list.append(root + "/" + data_file)
+                    depth_file_list.append(root + '/' + data_file[:-8] + "depthcrop.png")
+                    label_list.append(root.split("/")[-1])
+
+            for i in range(len(rgb_file_list)):
+                rgb_im = misc.imread(rgb_file_list[i])
+                depth_im = misc.imread(depth_file_list[i])
+
+                #we are going to scale the images so
+                #smallest dimension is 72
+                if rgb_im.shape[0] > rgb_im.shape[1]:
+                    scale_factor = 72.0/rgb_im.shape[1]
+                else:
+                    scale_factor = 72.0/rgb_im.shape[0]
+
+                rgb_im_resized = misc.imresize(rgb_im, scale_factor)
+                depth_im_resized = misc.imresize(depth_im, scale_factor)
+
+                #now we are going to crop out a 72x72 patch from the center of
+                #the resized image
+                center_x, center_y = rgb_im_resized.shape[0]/2, rgb_im_resized.shape[1]/2
+
+                rgb_im_cropped = rgb_im_resized[center_x-36:center_x+36, center_y-36:center_y+36, :]
+                depth_im_cropped = depth_im_resized[center_x-36:center_x+36, center_y-36:center_y+36]
+
+                dataset[self.data_labels[0]][i+total_count, :, :, 0:3] = rgb_im_cropped
+                dataset[self.data_labels[0]][i+total_count, :, :, 3] = depth_im_cropped
+                dataset[self.data_labels[1]][i+total_count] = unique_label_list.index(label_list[i])
+
+                total_count += 1
 
 
 class ExtractPatches(preprocessing.Preprocessor):
@@ -125,10 +208,11 @@ class FlattenPatches(preprocessing.Preprocessor):
             flattened_patches[i] = patches[i].flatten()
 
 
-class GlobalContrastNormalizePatches(preprocessing.Preprocessor):
+class PerChannelGlobalContrastNormalizePatches(preprocessing.Preprocessor):
 
     def __init__(self,
                  data_to_normalize_key,
+                 normalized_data_key,
                  batch_size,
                  subtract_mean=True,
                  scale=1.,
@@ -137,6 +221,7 @@ class GlobalContrastNormalizePatches(preprocessing.Preprocessor):
                  min_divisor=1e-8):
 
         self.data_to_normalize_key = data_to_normalize_key
+        self.normalized_data_key = normalized_data_key
         self.batch_size = batch_size
         self.subtract_mean = subtract_mean
         self.scale = scale
@@ -146,20 +231,21 @@ class GlobalContrastNormalizePatches(preprocessing.Preprocessor):
 
     def apply(self, dataset, can_fit=False):
 
-        data = dataset[self.data_to_normalize_key]
-        data_size = data.shape[0]
+        in_data = dataset[self.data_to_normalize_key]
+        data_size = in_data.shape[0]
 
-        for i in xrange(0, data_size, self.batch_size):
-            stop = i + self.batch_size
+        dataset.create_dataset(self.normalized_data_key, in_data.shape, chunks=((self.batch_size,)+in_data.shape[1:]))
 
-            X = data[i:stop]
+        out_data = dataset[self.normalized_data_key]
 
-            for index in range(i, stop):
+        #iterate over patches
+        for patch_index in range(data_size):
 
-                X_normalized = global_contrast_normalize(X,
-                                                         scale=self.scale,
-                                                         subtract_mean=self.subtract_mean,
-                                                         use_std=self.use_std,
-                                                         sqrt_bias=self.sqrt_bias,
-                                                         min_divisor=self.min_divisor)
-                data[i:stop] = X_normalized
+            #iterate over rgbd so they are all normalized separately at this point
+            for channel in range(4):
+                out_data[patch_index, :, :, channel] = global_contrast_normalize(in_data[patch_index, :, :, channel],
+                                                                             scale=self.scale,
+                                                                             subtract_mean=self.subtract_mean,
+                                                                             use_std=self.use_std,
+                                                                             sqrt_bias=self.sqrt_bias,
+                                                                             min_divisor=self.min_divisor)

@@ -27,25 +27,12 @@ def preprocess_nyu_depth_dataset(attribs):
 
         #labels for the hdf5 file
         patch_label = which_set + "_patches"
-        flattened_patch_label = which_set + "_flattened_patches"
         patch_labels = (patch_label, which_set + "_patch_labels")
 
         pipeline.items.append(hdf5_data_preprocessors.ExtractPatches(patch_shape=attribs["patch_shape"],
                                                                      patch_labels=patch_labels,
                                                                      patch_source_labels=("rgbd", "labels"),
                                                                      num_patches=num_patches))
-
-        pipeline.items.append(hdf5_data_preprocessors.FlattenPatches(patch_label=patch_label,
-                                                                     flattened_patch_label=flattened_patch_label))
-
-        pipeline.items.append(hdf5_data_preprocessors.GlobalContrastNormalizePatches(
-            data_to_normalize_key=flattened_patch_label,
-            batch_size=100,
-            subtract_mean=True,
-            scale=1.,
-            sqrt_bias=0.,
-            use_std=False,
-            min_divisor=1e-8))
 
     #now lets actually make a new dataset and run it through the pipeline
     hd5f_dataset = h5py.File(attribs["output_filepath"])

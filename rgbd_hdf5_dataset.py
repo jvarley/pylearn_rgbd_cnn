@@ -24,10 +24,10 @@ def get_dataset(which_set='train'):
 
     hdf5_dataset_filename = PYLEARN_DATA_PATH + "/nyu_depth_labeled/rgbd_preprocessed_72x72.h5"
 
-    X = which_set + "_flattened_patches"
+    X = which_set + "_patches"
     y = which_set + "_patch_labels"
 
-    return HDF5Dataset(hdf5_dataset_filename, X=X, y=y)
+    return HDF5Dataset(hdf5_dataset_filename, topo_view=X, y=y)
 
 
 class HDF5Dataset(DenseDesignMatrix):

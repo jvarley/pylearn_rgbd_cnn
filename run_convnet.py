@@ -30,7 +30,6 @@ def get_classifier():
     # (~num_rows,~num_cols, num_labels)
     Y = T.dot(X, cnn_model.W) + cnn_model.b
 
-
     #we can take the arg max to get the per pixel label
     #So Y is of shape:
     # (1, ~num_rows, ~num_cols)
@@ -39,7 +38,7 @@ def get_classifier():
     return theano.function([X], Y_out)
 
 
-#this will be all layers except the last layer
+#this will be all the convolutional layers
 def get_feature_extractor():
     f = open(CONV_MODEL_FILENAME)
     cnn_model = cPickle.load(f)
@@ -96,11 +95,13 @@ if __name__ == "__main__":
     image = get_test_image()
 
     image_features = feature_extractor(image[:, 0:320, 0:240, :])
-    import IPython
-    IPython.embed()
-    classified_image = classifier(image_features)
-    #switch from ('', '')
+
+    #from: ('b', '0', '1', 'c')
+    # to : ('b', 'c', '0', '1')
     image_features = np.rollaxis(image_features, 1, 4)
+
+    classified_image = classifier(image_features)
+
     plt.imshow(classified_image[0, :, :])
 
     import IPython
