@@ -18,34 +18,17 @@ def preprocess_uwash_depth_dataset(attribs):
     pipeline.items.append(hdf5_data_preprocessors.ExtractRawUWashData(attribs["raw_data_folder"],
                                                                       data_labels=("rgbd_patches", "patch_labels")))
 
-    # #add the steps necessary to generate data for
-    # # valid, test and training datasets
-    # for i in range(len(attribs["sets"])):
-    #
-    #     which_set = attribs["sets"][i]
-    #     num_patches = attribs["num_patches_per_set"][i]
-    #
-    #     #labels for the hdf5 file
-    #     patch_label = which_set + "_patches"
-    #     flattened_patch_label = which_set + "_flattened_patches"
-    #     patch_labels = (patch_label, which_set + "_patch_labels")
-    #
-    #     pipeline.items.append(hdf5_data_preprocessors.ExtractPatches(patch_shape=attribs["patch_shape"],
-    #                                                                  patch_labels=patch_labels,
-    #                                                                  patch_source_labels=("rgbd", "labels"),
-    #                                                                  num_patches=num_patches))
-    #
-    #     pipeline.items.append(hdf5_data_preprocessors.FlattenPatches(patch_label=patch_label,
-    #                                                                  flattened_patch_label=flattened_patch_label))
-    #
-    #     pipeline.items.append(hdf5_data_preprocessors.GlobalContrastNormalizePatches(
-    #         data_to_normalize_key=flattened_patch_label,
-    #         batch_size=100,
-    #         subtract_mean=True,
-    #         scale=1.,
-    #         sqrt_bias=0.,
-    #         use_std=False,
-    #         min_divisor=1e-8))
+    pipeline.items.append(hdf5_data_preprocessors.PerChannelGlobalContrastNormalizePatches(
+        data_to_normalize_key='rgbd_patches',
+        normalized_data_key='normalized_rgbd_patches',
+        batch_size=100))
+
+    #this extracts a valid set and test set
+    pipeline.items.append(hdf5_data_preprocessors.SplitData(
+        data_to_split_key=('rgbd_patches', 'patch_labels'),
+        sets=attribs["sets"],
+        patch_shape=attribs["patch_shape"],
+        num_patches_per_set=attribs["num_patches_per_set"]))
 
     #now lets actually make a new dataset and run it through the pipeline
     hd5f_dataset = h5py.File(attribs["output_filepath"])
@@ -54,8 +37,8 @@ def preprocess_uwash_depth_dataset(attribs):
 
 if __name__ == "__main__":
 
-    preprocess_attribs = dict(sets=("train", "test", "valid"),
-                              num_patches_per_set=(100000, 10000, 10000),
+    preprocess_attribs = dict(sets=("test", "valid"),
+                              num_patches_per_set=(10000, 10000),
                               patch_shape=(72, 72),
                               raw_data_folder=PYLEARN_DATA_PATH + "/rgbd-dataset",
                               output_filepath=PYLEARN_DATA_PATH + "/rgbd-dataset/rgbd_preprocessed_72x72.h5")

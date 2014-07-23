@@ -19,10 +19,13 @@ from pylearn2.space import CompositeSpace, VectorSpace
 
 PYLEARN_DATA_PATH = os.environ["PYLEARN2_DATA_PATH"]
 
+#these need to go away!
+NUM_TRAINING_SAMPLES = 207000
+NUM_LABELS = 300
 
-def get_dataset(which_set='train'):
+def get_dataset(which_set='train', dataset_filepath="/nyu_depth_labeled/rgbd_preprocessed_72x72.h5"):
 
-    hdf5_dataset_filename = PYLEARN_DATA_PATH + "/nyu_depth_labeled/rgbd_preprocessed_72x72.h5"
+    hdf5_dataset_filename = PYLEARN_DATA_PATH + dataset_filepath
 
     X = which_set + "_patches"
     y = which_set + "_patch_labels"
@@ -183,12 +186,12 @@ class HDF5Dataset(DenseDesignMatrix):
                 elif src == "targets":
                     #######################################################
                     #this was added to to expand the y's just when we need them
-                    dspace = pylearn2.space.VectorSpace(894)
+                    dspace = pylearn2.space.VectorSpace(NUM_LABELS)
 
                     def fn(batch, dspace=dspace, sp=sp):
                         try:
 
-                            batch_2 = pylearn2.utils.one_hot.one_hot(batch.astype(int), max_label=893)
+                            batch_2 = pylearn2.utils.one_hot.one_hot(batch.astype(int), max_label=NUM_LABELS-1)
                             #return dspace.np_format_as(batch, sp)
                             return dspace.np_format_as(batch_2, sp)
 
@@ -404,7 +407,7 @@ class HDF5DatasetIterator(object):
 
         # convert to boolean selection
         #sel = np.zeros(self.num_examples, dtype=bool)
-        sel = np.zeros(100000, dtype=bool)
+        sel = np.zeros(NUM_TRAINING_SAMPLES, dtype=bool)
         sel[next_index] = True
         next_index = sel
 

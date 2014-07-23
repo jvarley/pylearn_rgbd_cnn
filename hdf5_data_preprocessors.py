@@ -55,7 +55,7 @@ class ExtractRawUWashData(preprocessing.Preprocessor):
             return
 
         print "determining number of labels"
-        num_images = 0
+        num_images = 1
         label_list = []
 
         for root, subfolders, files in os.walk(self.raw_data_folder):
@@ -66,8 +66,8 @@ class ExtractRawUWashData(preprocessing.Preprocessor):
 
         unique_label_list = list(set(label_list))
 
-        print "num_images:" + str(len(label_list))
-        print "num_labels:" + str(len(unique_label_list))
+        print "num_images: " + str(len(label_list))
+        print "num_labels: " + str(len(unique_label_list))
 
         print "creating datasets"
         dataset.create_dataset("label_id_to_string", (len(unique_label_list), 1), dtype=h5py.special_dtype(vlen=unicode))
@@ -82,7 +82,9 @@ class ExtractRawUWashData(preprocessing.Preprocessor):
         for root, subfolders, files in os.walk(self.raw_data_folder):
 
             #print the current directory we are working on
+            #as well as how far along we are
             print root
+            print str(total_count) + "/" + str(num_images)
 
             rgb_file_list = []
             depth_file_list = []
@@ -119,7 +121,7 @@ class ExtractRawUWashData(preprocessing.Preprocessor):
                 dataset[self.data_labels[0]][i+total_count, :, :, 3] = depth_im_cropped
                 dataset[self.data_labels[1]][i+total_count] = unique_label_list.index(label_list[i])
 
-                total_count += 1
+            total_count += len(rgb_file_list)
 
 
 class ExtractPatches(preprocessing.Preprocessor):
@@ -231,6 +233,13 @@ class PerChannelGlobalContrastNormalizePatches(preprocessing.Preprocessor):
 
     def apply(self, dataset, can_fit=False):
 
+        #check if we have already flattened patches
+        if self.normalized_data_key in dataset.keys():
+            print "skipping normalization, this has already been run"
+            return
+        else:
+            print "normalizing patches"
+
         in_data = dataset[self.data_to_normalize_key]
         data_size = in_data.shape[0]
 
@@ -240,6 +249,8 @@ class PerChannelGlobalContrastNormalizePatches(preprocessing.Preprocessor):
 
         #iterate over patches
         for patch_index in range(data_size):
+            if patch_index % 2000 == 0:
+                print str(patch_index) + '/' + str(data_size)
 
             #iterate over rgbd so they are all normalized separately at this point
             for channel in range(4):
@@ -249,3 +260,43 @@ class PerChannelGlobalContrastNormalizePatches(preprocessing.Preprocessor):
                                                                              use_std=self.use_std,
                                                                              sqrt_bias=self.sqrt_bias,
                                                                              min_divisor=self.min_divisor)
+
+
+class SplitData(preprocessing.Preprocessor):
+
+    def __init__(self,
+                 data_to_split_key=('rgbd_patches', 'patch_labels'),
+                 sets=("test", "valid"),
+                 patch_shape=(72, 72),
+                 num_patches_per_set=(10000, 10000)):
+
+        self.data_to_split_key = data_to_split_key
+        self.sets = sets
+        self.patch_shape = patch_shape
+        self.num_patches_per_set = num_patches_per_set
+
+    def apply(self, dataset, can_fit=False):
+
+        for set_index in range(len(self.sets)):
+
+            set_type = self.sets[set_index]
+
+            if set_type + "_patches" in dataset.keys():
+                print "skipping " + set_type + "already exists in dataset"
+                continue
+            else:
+                print "extracting " + set_type
+
+            set_shape = (self.num_patches_per_set[set_index],) + self.patch_shape + (4,)
+            dataset.create_dataset(set_type + "_patches", set_shape, chunks=((100,) + set_shape[1:]))
+            dataset.create_dataset(set_type + "_patch_labels", (self.num_patches_per_set[set_index], 1))
+
+            num_original_patches = dataset[self.data_to_split_key[0]].shape[0]
+
+            for i in range(set_shape[0]):
+                if i % 2000 == 0:
+                    print str(i) + "/" + str(set_shape[0])
+                index = np.random.randint(num_original_patches)
+                dataset[set_type + "_patches"][i] = dataset[self.data_to_split_key[0]][index]
+                dataset[set_type + "_patch_labels"][i] = dataset[self.data_to_split_key[1]][index]
+
