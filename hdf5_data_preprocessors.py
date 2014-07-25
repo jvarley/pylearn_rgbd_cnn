@@ -300,3 +300,30 @@ class SplitData(preprocessing.Preprocessor):
                 dataset[set_type + "_patches"][i] = dataset[self.data_to_split_key[0]][index]
                 dataset[set_type + "_patch_labels"][i] = dataset[self.data_to_split_key[1]][index]
 
+
+class MakeC01B(preprocessing.Preprocessor):
+
+    def __init__(self, data_labels=("train_patches", "test_patches", "valid_patches")):
+
+        self.data_labels = data_labels
+
+    def apply(self, dataset, can_fit=False):
+
+        #check if we have already extracted the raw data
+        if "c01b_" + self.data_labels[0] in dataset.keys():
+            print "skipping extract_raw_data, this has already been run"
+            return
+
+        for data_label in self.data_labels:
+            print data_label
+            num_images = dataset[data_label].shape[0]
+            dataset.create_dataset("c01b_" + data_label, (4, 72, 72, num_images), chunks=(4, 72, 72, 100))
+
+            for i in range(num_images):
+                if i % (num_images/100) == 0:
+                    print "converting to co1b: " + str(i) + "/" + str(num_images)
+
+                    b01c_data = np.copy(dataset[data_label][i])
+                    c01b_data = np.rollaxis(b01c_data, 2)
+
+                    dataset["c01b_" + data_label][:, :, :, i] = c01b_data

@@ -34,6 +34,8 @@ def preprocess_nyu_depth_dataset(attribs):
                                                                      patch_source_labels=("rgbd", "labels"),
                                                                      num_patches=num_patches))
 
+    pipeline.items.append(hdf5_data_preprocessors.MakeC01B())
+
     #now lets actually make a new dataset and run it through the pipeline
     hd5f_dataset = h5py.File(attribs["output_filepath"])
     pipeline.apply(hd5f_dataset)

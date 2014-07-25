@@ -98,6 +98,7 @@ def get_weights_report(model_path=None,
     try:
         weights_view = model.get_weights_topo()
         h = weights_view.shape[0]
+        print "h:" + str(h)
     except NotImplementedError:
 
         if dataset is None:
@@ -144,6 +145,9 @@ Original exception: """+str(e))
         assert weights_view.shape[0] == h
     try:
         hr, hc = model.get_weights_view_shape()
+        print hr , hc
+        hr = int(np.ceil(np.sqrt(h*4)))
+        hc = hr
     except NotImplementedError:
         hr = int(np.ceil(np.sqrt(h*4)))
         hc = hr
